@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gotify 通知</title>
+    <style>
+        :root {
+            /* 日间模式颜色变量 */
+            --bg-primary: #f5f7fa;
+            --bg-secondary: #ffffff;
+            --bg-gradient-start: #f5f7fa;
+            --bg-gradient-end: #e8ecf1;
+            --text-primary: #1a1a2e;
+            --text-secondary: #6b7280;
+            --text-tertiary: #9ca3af;
+            --border-color: #e5e7eb;
+            --shadow: rgba(0, 0, 0, 0.05);
+            --accent: #4f46e5;
+            --accent-hover: #4338ca;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --card-bg: #ffffff;
+            --header-bg: #ffffff;
+            --empty-text: #9ca3af;
+        }
+
+        [data-theme="dark"] {
+            /* 夜间模式颜色变量 */
+            --bg-primary: #0f1419;
+            --bg-secondary: #16181d;
+            --bg-gradient-start: #0f1419;
+            --bg-gradient-end: #1a1d24;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-tertiary: #6b7280;
+            --border-color: #2d3748;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --accent: #6366f1;
+            --accent-hover: #7c3aed;
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --card-bg: #1a1d24;
+            --header-bg: #16181d;
+            --empty-text: #6b7280;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Roboto, sans-serif;
+            background: var(--bg-primary);
+            padding: 0;
+            margin: 0;
+            min-height: 100vh;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+
+        .container {
+            padding: 0;
+            max-width: 100%;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        .notifications-container {
+            display: grid;
+            gap: 10px;
+            padding: 12px;
+            padding-bottom: 70px;
+            /* 留出空间给右下角按钮 */
+        }
+
+        .theme-toggle {
+            position: fixed;
+            left: 16px;
+            bottom: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px var(--shadow);
+            z-index: 1000;
+        }
+
+        .theme-toggle span {
+            display: block;
+            line-height: 1;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .theme-toggle:active {
+            transform: scale(0.95);
+        }
+
+        .clear-all-btn {
+            position: fixed;
+            right: 16px;
+            bottom: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--danger);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 8px var(--shadow);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .clear-all-btn:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .clear-all-btn:active {
+            transform: scale(0.95);
+        }
+
+        .clear-all-btn.visible {
+            display: flex;
+        }
+
+
+        .notification-card {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 14px;
+            box-shadow: 0 1px 3px var(--shadow);
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .notification-card.pinned {
+            background: linear-gradient(135deg, var(--card-bg) 0%, var(--card-bg) 100%);
+            border: 2px solid var(--accent);
+            box-shadow: 0 2px 8px var(--shadow);
+        }
+
+        .notification-card.pinned::after {
+            content: '📌';
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            font-size: 12px;
+            opacity: 0.5;
+        }
+
+        .notification-card:hover {
+            box-shadow: 0 4px 12px var(--shadow);
+            transform: translateY(-2px);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .notification-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: var(--accent);
+        }
+
+        .notification-card.priority-high::before {
+            background: var(--danger);
+        }
+
+        .notification-card.priority-medium::before {
+            background: var(--warning);
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding-left: 20px;
+            /* 为置顶图标留出空间 */
+        }
+
+        .notification-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+            padding-right: 8px;
+            line-height: 1.4;
+        }
+
+        .notification-time {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            white-space: nowrap;
+        }
+
+        .notification-message {
+            color: var(--text-secondary);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 13px;
+        }
+
+        .notification-meta {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .notification-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .action-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+            transform: scale(1.05);
+        }
+
+        .action-btn.delete:hover {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .priority-badge.high {
+            background: var(--danger);
+            color: white;
+        }
+
+        .priority-badge.medium {
+            background: var(--warning);
+            color: white;
+        }
+
+        .priority-badge.low {
+            background: var(--success);
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--empty-text);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.6;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .new-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: var(--danger);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        /* 响应式布局 - 适配更窄的窗口 */
+        @media (max-width: 400px) {
+            .header h1 {
+                font-size: 14px;
+            }
+
+            .test-btn {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .theme-toggle {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+            }
+
+            .notification-card {
+                padding: 12px;
+            }
+        }
+
+        /* 滚动条优化 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Tauri API 初始化脚本 - 必须在所有脚本之前加载 -->
+    <script src="tauri-api.js"></script>
+
+
+
+    <div class="container">
+        <div id="notifications" class="notifications-container">
+            <div class="empty-state">
+                <div class="empty-state-icon">📭</div>
+                <div class="empty-state-text">暂无通知</div>
+            </div>
+        </div>
+
+        <!-- 主题切换按钮 - 固定在右下角 -->
+        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+            <span id="theme-icon">🌙</span>
+        </button>
+
+        <!-- 清除全部按钮 -->
+        <button id="clearAllBtn" class="clear-all-btn" onclick="clearAllNotifications()" title="清除所有（保留置顶）">
+            🗑️
+        </button>
+    </div>
+
+    <script>
+        let notifications = [];
+        const notificationsContainer = document.getElementById('notifications');
+
+        // 初始化主题
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.textContent = theme === 'light' ? '🌙' : '☀️';
+            }
+        }
+
+        // 页面加载时初始化主题
+        initTheme();
+
+
+
+        async function restoreWindowPosition() {
+            if (typeof window.__TAURI__ === 'undefined') {
+                console.warn('⚠️ Tauri API 不可用，无法恢复窗口位置');
+                return;
+            }
+
+            try {
+                const savedPosition = localStorage.getItem('windowPosition');
+                if (!savedPosition) {
+                    console.log('ℹ️ 没有保存的窗口位置');
+                    return;
+                }
+
+                const position = JSON.parse(savedPosition);
+                const { getCurrentWindow } = window.__TAURI__.window;
+                const appWindow = getCurrentWindow();
+
+                // 使用 LogicalPosition
+                const { LogicalPosition } = window.__TAURI__.window;
+                await appWindow.setPosition(new LogicalPosition(position.x, position.y));
+
+                console.log('📍 窗口位置已恢复:', position);
+            } catch (error) {
+                console.error('恢复窗口位置失败:', error);
+            }
+        }
+
+        // 监听窗口移动事件
+        let savePositionTimer;
+        async function setupWindowPositionTracking() {
+            if (typeof window.__TAURI__ === 'undefined') {
+                console.warn('⚠️ Tauri API 不可用，无法设置窗口位置追踪');
+                return;
+            }
+
+            try {
+                const { getCurrentWindow } = window.__TAURI__.window;
+                const appWindow = getCurrentWindow();
+
+                // 监听窗口移动事件
+                await appWindow.onMoved(() => {
+                    // 使用防抖，避免频繁保存
+                    clearTimeout(savePositionTimer);
+                    savePositionTimer = setTimeout(() => {
+                        saveWindowPosition();
+                    }, 500);
+                });
+
+                console.log('✅ 窗口位置追踪已启用');
+            } catch (error) {
+                console.error('设置窗口位置追踪失败:', error);
+            }
+        }
+
+        // 等待 DOM 和 Tauri 完全加载
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('========================================');
+            console.log('DOM 已加载，开始初始化 Tauri 监听器');
+            console.log('========================================');
+
+            // 等待一小段时间确保 Tauri API 完全初始化
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // 初始化窗口位置监听
+            initWindowPositionTracking();
+
+
+
+            console.log('检查 Tauri API 可用性:');
+            console.log('  window.__TAURI__:', typeof window.__TAURI__);
+            console.log('  window.__TAURI_INTERNALS__:', typeof window.__TAURI_INTERNALS__);
+
+            // 调试：打印 __TAURI_INTERNALS__ 的所有属性
+            if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+                console.log('🔍 __TAURI_INTERNALS__ 的所有属性:', Object.keys(window.__TAURI_INTERNALS__));
+                console.log('🔍 完整对象:', window.__TAURI_INTERNALS__);
+
+                // 检查是否有 invoke 函数
+                console.log('🔍 检查全局 invoke:', typeof window.__TAURI_IPC__);
+                console.log('🔍 检查全局对象:', {
+                    __TAURI__: typeof window.__TAURI__,
+                    __TAURI_INTERNALS__: typeof window.__TAURI_INTERNALS__,
+                    __TAURI_IPC__: typeof window.__TAURI_IPC__,
+                    __TAURI_INVOKE__: typeof window.__TAURI_INVOKE__,
+                    ipc: typeof window.ipc
+                });
+
+                // 打印 window 上所有以 __TAURI 开头的属性
+                const tauriProps = Object.keys(window).filter(k => k.startsWith('__TAURI'));
+                console.log('🔍 所有 __TAURI 相关属性:', tauriProps);
+                tauriProps.forEach(prop => {
+                    console.log(`  ${prop}:`, typeof window[prop]);
+                });
+            }
+
+            if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+                console.log('✅ 使用 Tauri v2 API (__TAURI_INTERNALS__)');
+
+                try {
+                    let listen;
+
+                    // 尝试从 __TAURI__.event.listen 获取 (最可能的位置)
+                    if (typeof window.__TAURI__ !== 'undefined' && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
+                        listen = window.__TAURI__.event.listen;
+                        console.log('✅ 使用 window.__TAURI__.event.listen');
+                    } else {
+                        throw new Error('window.__TAURI__.event.listen 不可用，请检查 Tauri 配置');
+                    }
+
+                    console.log('listen 函数类型:', typeof listen);
+
+                    // 注册 gotify-message 监听器
+                    console.log('正在注册 gotify-message 监听器...');
+                    const unlisten1 = await listen('gotify-message', (event) => {
+                        console.log('🎉🎉🎉 收到 gotify-message 事件！');
+                        console.log('事件对象:', event);
+                        console.log('事件 payload:', event.payload);
+                        addNotification(event.payload);
+                    });
+                    console.log('✅ gotify-message 监听器注册成功！unlisten:', unlisten1);
+
+                    // 注册 websocket-status 监听器
+                    console.log('正在注册 websocket-status 监听器...');
+                    const unlisten2 = await listen('websocket-status', (event) => {
+                        console.log('🔔 收到 websocket-status:', event.payload);
+                        // 状态元素已移除，仅记录日志
+                    });
+                    console.log('✅ websocket-status 监听器注册成功！');
+
+                    console.log('========================================');
+                    console.log('🎊 所有监听器注册完成！等待接收消息...');
+                    console.log('========================================');
+
+                    // 在 Tauri API 确认可用后，恢复窗口位置和启动追踪
+                    await restoreWindowPosition();
+                    await setupWindowPositionTracking();
+
+                } catch (error) {
+                    console.error('❌❌❌ 注册监听器时出错:');
+                    console.error('错误对象:', error);
+                    console.error('错误消息:', error.message);
+                    console.error('错误堆栈:', error.stack);
+                }
+            } else if (typeof window.__TAURI__ !== 'undefined') {
+                console.log('⚠️ 检测到 Tauri v1 API，尝试使用 v1 方式');
+
+                if (window.__TAURI__.event && window.__TAURI__.event.listen) {
+                    const { listen } = window.__TAURI__.event;
+
+                    await listen('gotify-message', (event) => {
+                        console.log('📬 收到消息 (v1):', event);
+                        addNotification(event.payload);
+                    });
+
+                    console.log('✅ v1 监听器已设置');
+                }
+            } else {
+                console.error('❌❌❌ Tauri API 完全不可用！');
+                console.error('这不应该发生，请检查是否在浏览器中打开了文件');
+            }
+        });
+
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+
+            if (days > 0) return `${days}天前`;
+            if (hours > 0) return `${hours}小时前`;
+            if (minutes > 0) return `${minutes}分钟前`;
+            return '刚刚';
+        }
+
+        function getPriorityClass(priority) {
+            if (priority >= 8) return 'high';
+            if (priority >= 5) return 'medium';
+            return 'low';
+        }
+
+        function getPriorityLabel(priority) {
+            if (priority >= 8) return '高';
+            if (priority >= 5) return '中';
+            return '低';
+        }
+
+        function renderNotifications() {
+            const clearAllBtn = document.getElementById('clearAllBtn');
+
+            if (notifications.length === 0) {
+                notificationsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-text">暂无通知</div>
+                    </div>
+                `;
+                if (clearAllBtn) clearAllBtn.classList.remove('visible');
+                return;
+            }
+
+            // 显示清除按钮
+            if (clearAllBtn) clearAllBtn.classList.add('visible');
+
+            // 分离置顶和非置顶通知
+            const pinnedNotifs = notifications.filter(n => n.pinned);
+            const unpinnedNotifs = notifications.filter(n => !n.pinned);
+            const sortedNotifs = [...pinnedNotifs, ...unpinnedNotifs];
+
+            const html = sortedNotifs.map((notif, index) => {
+                const priorityClass = getPriorityClass(notif.priority);
+                const priorityLabel = getPriorityLabel(notif.priority);
+                const timeAgo = formatTime(notif.date);
+                const isNew = index === 0 && !notif.pinned && notifications.length > 1;
+                const pinnedClass = notif.pinned ? 'pinned' : '';
+
+                return `
+                    <div class="notification-card priority-${priorityClass} ${pinnedClass}" data-id="${notif.id}">
+                        ${isNew ? '<div class="new-badge">NEW</div>' : ''}
+                        <div class="notification-header">
+                            <div class="notification-title">${escapeHtml(notif.title)}</div>
+                            <div class="notification-time">${timeAgo}</div>
+                        </div>
+                        <div class="notification-message">${escapeHtml(notif.message)}</div>
+                        <div class="notification-meta">
+                            <div>
+                                <span class="priority-badge ${priorityClass}">优先级: ${priorityLabel}</span>
+                                <span style="margin-left: 8px;">ID: ${notif.id}</span>
+                            </div>
+                            <div class="notification-actions">
+                                <button class="action-btn" onclick="togglePin(${notif.id}, event)" title="${notif.pinned ? '取消置顶' : '置顶'}">
+                                    ${notif.pinned ? '📍' : '📌'}
+                                </button>
+                                <button class="action-btn delete" onclick="deleteNotification(${notif.id}, event)" title="删除">
+                                    ✖️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            notificationsContainer.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addNotification(notif) {
+            console.log('📨 收到通知:', notif);
+            // 添加 pinned 属性，默认为 false
+            notif.pinned = false;
+            notifications.unshift(notif);
+
+            // 只保留最近50条
+            if (notifications.length > 50) {
+                notifications = notifications.slice(0, 50);
+            }
+
+            renderNotifications();
+
+            // 播放声音（可选）
+            // new Audio('notification.mp3').play();
+        }
+
+        // 置顶/取消置顶通知
+        function togglePin(id, event) {
+            event.stopPropagation();
+            const notif = notifications.find(n => n.id === id);
+            if (notif) {
+                notif.pinned = !notif.pinned;
+                renderNotifications();
+                console.log(`📌 通知 ${id} ${notif.pinned ? '已置顶' : '取消置顶'}`);
+            }
+        }
+
+        // 删除单条通知
+        function deleteNotification(id, event) {
+            event.stopPropagation();
+            const index = notifications.findIndex(n => n.id === id);
+            if (index !== -1) {
+                notifications.splice(index, 1);
+                renderNotifications();
+                console.log(`🗑️ 通知 ${id} 已删除`);
+            }
+        }
+
+        // 清除所有通知（保留置顶）
+        function clearAllNotifications() {
+            const pinnedCount = notifications.filter(n => n.pinned).length;
+            const beforeCount = notifications.length;
+
+            notifications = notifications.filter(n => n.pinned);
+
+            const deletedCount = beforeCount - notifications.length;
+
+            renderNotifications();
+
+            if (deletedCount > 0) {
+                console.log(`🗑️ 已清除 ${deletedCount} 条通知${pinnedCount > 0 ? `，保留 ${pinnedCount} 条置顶通知` : ''}`);
+            } else {
+                console.log('ℹ️ 没有可清除的通知');
+            }
+        }
+
+
+        // 窗口位置跟踪
+        let savePositionTimeout;
+
+        async function initWindowPositionTracking() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') return;
+
+            try {
+                console.log('🪟 初始化窗口位置跟踪...');
+
+                // 使用 Tauri 事件监听窗口移动和调整大小
+                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+                    const { listen } = window.__TAURI__.event;
+
+                    // 监听窗口移动事件
+                    await listen('tauri://move', (event) => {
+                        console.log('🪟 窗口移动事件');
+                        saveWindowPositionDebounced();
+                    });
+
+                    // 监听窗口调整大小事件
+                    await listen('tauri://resize', (event) => {
+                        console.log('🪟 窗口调整大小事件');
+                        saveWindowPositionDebounced();
+                    });
+
+                    console.log('✅ 窗口事件监听器已注册');
+                } else {
+                    console.warn('⚠️ Tauri 事件 API 不可用，仅在关闭时保存');
+                }
+
+                // 页面关闭时保存
+                window.addEventListener('beforeunload', saveWindowPosition);
+
+                console.log('✅ 窗口位置跟踪已初始化');
+            } catch (error) {
+                console.error('初始化窗口位置跟踪失败:', error);
+            }
+        }
+
+        // 防抖保存函数
+        function saveWindowPositionDebounced() {
+            clearTimeout(savePositionTimeout);
+            savePositionTimeout = setTimeout(() => {
+                console.log('💾 防抖保存窗口位置');
+                saveWindowPosition();
+            }, 1000); // 1秒后保存
+        }
+
+        async function saveWindowPosition() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') return;
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+
+                console.log('💾 自动保存窗口位置...');
+
+                // 让后端直接获取窗口位置
+                await invoke('save_window_position_auto');
+
+                console.log('✅ 窗口位置保存完成');
+            } catch (error) {
+                console.error('❌ 保存窗口位置失败:', error);
+            }
+        }
+
+        // 每分钟更新一次时间显示
+        setInterval(() => {
+            const timeElements = document.querySelectorAll('.notification-time');
+            notifications.forEach((notif, index) => {
+                if (timeElements[index]) {
+                    timeElements[index].textContent = formatTime(notif.date);
+                }
+            });
+        }, 60000);
+
+        // 快捷键支持
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + K: 清除全部
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                clearAllNotifications();
+            }
+        });
+    </script>
+</body>
+
+</html>

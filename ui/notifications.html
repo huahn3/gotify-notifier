@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gotify 通知</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .status {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status.connected {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .notifications-container {
+            display: grid;
+            gap: 15px;
+        }
+
+        .notification-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .notification-card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #667eea;
+        }
+
+        .notification-card.priority-high::before {
+            background: #dc3545;
+        }
+
+        .notification-card.priority-medium::before {
+            background: #ffc107;
+        }
+
+        .notification-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .notification-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+        .notification-time {
+            font-size: 12px;
+            color: #999;
+            white-space: nowrap;
+        }
+
+        .notification-message {
+            color: #555;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .notification-meta {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .priority-badge.high {
+            background: #dc3545;
+            color: white;
+        }
+
+        .priority-badge.medium {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .priority-badge.low {
+            background: #28a745;
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .empty-state-text {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .new-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #dc3545;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔔 Gotify 通知中心</h1>
+        <div id="status" class="status">正在连接...</div>
+    </div>
+
+    <div id="notifications" class="notifications-container">
+        <div class="empty-state">
+            <div class="empty-state-icon">📭</div>
+            <div class="empty-state-text">暂无通知</div>
+        </div>
+    </div>
+
+    <script>
+        let notifications = [];
+        const notificationsContainer = document.getElementById('notifications');
+        const statusElement = document.getElementById('status');
+
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const diff = now - date;
+            
+            const seconds = Math.floor(diff / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const hours = Math.floor(minutes / 60);
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) return `${days}天前`;
+            if (hours > 0) return `${hours}小时前`;
+            if (minutes > 0) return `${minutes}分钟前`;
+            return '刚刚';
+        }
+
+        function getPriorityClass(priority) {
+            if (priority >= 8) return 'high';
+            if (priority >= 5) return 'medium';
+            return 'low';
+        }
+
+        function getPriorityLabel(priority) {
+            if (priority >= 8) return '高';
+            if (priority >= 5) return '中';
+            return '低';
+        }
+
+        function renderNotifications() {
+            if (notifications.length === 0) {
+                notificationsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-text">暂无通知</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = notifications.map((notif, index) => {
+                const priorityClass = getPriorityClass(notif.priority);
+                const priorityLabel = getPriorityLabel(notif.priority);
+                const timeAgo = formatTime(notif.date);
+                const isNew = index === 0 && notifications.length > 1;
+
+                return `
+                    <div class="notification-card priority-${priorityClass}">
+                        ${isNew ? '<div class="new-badge">NEW</div>' : ''}
+                        <div class="notification-header">
+                            <div class="notification-title">${escapeHtml(notif.title)}</div>
+                            <div class="notification-time">${timeAgo}</div>
+                        </div>
+                        <div class="notification-message">${escapeHtml(notif.message)}</div>
+                        <div class="notification-meta">
+                            <span class="priority-badge ${priorityClass}">优先级: ${priorityLabel}</span>
+                            <span>ID: ${notif.id}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            notificationsContainer.innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addNotification(notif) {
+            console.log('📨 收到通知:', notif);
+            notifications.unshift(notif);
+            
+            // 只保留最近50条
+            if (notifications.length > 50) {
+                notifications = notifications.slice(0, 50);
+            }
+            
+            renderNotifications();
+            
+            // 播放声音（可选）
+            // new Audio('notification.mp3').play();
+        }
+
+        // 检查 Tauri API
+        if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+            console.log('✅ Tauri API 可用');
+            statusElement.textContent = '✅ 已连接';
+            statusElement.classList.add('connected');
+
+            const listen = window.__TAURI_INTERNALS__.listen;
+            
+            // 监听消息
+            listen('gotify-message', (event) => {
+                console.log('📬 收到事件:', event);
+                addNotification(event.payload);
+            });
+
+            listen('websocket-status', (event) => {
+                console.log('🔔 状态更新:', event.payload);
+                if (event.payload === 'connected') {
+                    statusElement.textContent = '✅ 已连接到 Gotify';
+                    statusElement.classList.add('connected');
+                } else {
+                    statusElement.textContent = '❌ 未连接';
+                    statusElement.classList.remove('connected');
+                }
+            });
+        } else {
+            console.error('❌ Tauri API 不可用');
+            statusElement.textContent = '❌ Tauri API 不可用';
+            
+            // 测试数据
+            setTimeout(() => {
+                addNotification({
+                    id: 1,
+                    appid: 1,
+                    title: '测试通知',
+                    message: '这是一条测试消息',
+                    priority: 5,
+                    date: new Date().toISOString()
+                });
+            }, 2000);
+        }
+
+        // 每分钟更新一次时间显示
+        setInterval(() => {
+            const timeElements = document.querySelectorAll('.notification-time');
+            notifications.forEach((notif, index) => {
+                if (timeElements[index]) {
+                    timeElements[index].textContent = formatTime(notif.date);
+                }
+            });
+        }, 60000);
+    </script>
+</body>
+</html>

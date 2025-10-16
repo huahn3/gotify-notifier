@@ -1,0 +1,124 @@
+╔════════════════════════════════════════════════════════════════╗
+║          🚀 GitHub Actions 快速使用指南                        ║
+╚════════════════════════════════════════════════════════════════╝
+
+📦 支持的平台和格式
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Windows        → MSI + NSIS 安装包
+✅ macOS (Intel)  → DMG + APP
+✅ macOS (ARM)    → DMG + APP (Apple Silicon)
+✅ Linux          → DEB + AppImage
+
+
+🎯 快速开始（3步完成首次部署）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ 初始化 Git 仓库（如果还没有）
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git remote add origin https://github.com/你的用户名/你的仓库名.git
+   git push -u origin main
+
+2️⃣ 启用 GitHub Actions 权限
+   前往: GitHub 仓库 → Settings → Actions → General
+   勾选: "Read and write permissions"
+   保存更改
+
+3️⃣ 触发构建
+   方式 A - 使用自动化脚本（最简单）:
+     ./deploy.sh
+   
+   方式 B - 手动操作:
+     git tag v0.1.0
+     git push origin v0.1.0
+
+
+⚡️ 日常发布流程
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# 修改代码后
+git add .
+git commit -m "你的提交信息"
+git push
+
+# 发布新版本
+./deploy.sh
+
+# 脚本会引导你完成：
+  ✓ 创建版本标签
+  ✓ 推送到 GitHub
+  ✓ 自动触发构建
+
+
+🔍 查看构建状态
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 访问: https://github.com/你的用户名/你的仓库名/actions
+2. 查看 "Build and Release" 工作流
+3. 点击运行中的任务查看实时日志
+4. 构建时间: 约 20-40 分钟
+
+
+📥 下载构建产物
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+方式 1 - 从 Artifacts（手动触发的构建）
+  1. Actions 页面 → 点击工作流运行
+  2. 滚动到底部 → Artifacts 部分
+  3. 下载对应平台的包
+
+方式 2 - 从 Releases（Tag 触发的构建）
+  1. 访问: https://github.com/你的用户名/你的仓库名/releases
+  2. 找到对应版本（初始为 Draft）
+  3. 编辑并发布 Release
+  4. 用户可直接下载
+
+
+🧪 测试构建（不发布）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 访问 GitHub 仓库 → Actions 标签
+2. 选择 "Build and Release"
+3. 点击 "Run workflow" 下拉菜单
+4. 选择分支（通常是 main）
+5. 点击绿色 "Run workflow" 按钮
+6. 构建完成后从 Artifacts 下载
+
+
+❗️ 常见问题
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q: 构建失败怎么办？
+A: 1. 查看 Actions 页面的详细日志
+   2. 检查是否启用了 Actions 权限
+   3. 确保图标文件齐全（src-tauri/icons/）
+
+Q: 如何删除已发布的版本？
+A: 1. 删除 Release: Releases → 选择版本 → Delete
+   2. 删除 Tag: git tag -d v0.1.0 && git push --delete origin v0.1.0
+
+Q: 可以只构建特定平台吗？
+A: 可以，编辑 .github/workflows/build.yml 文件，
+   注释掉不需要的平台
+
+
+📁 相关文件
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+.github/workflows/build.yml  → GitHub Actions 配置文件
+GITHUB_ACTIONS_GUIDE.md      → 详细使用文档
+deploy.sh                    → 自动化部署脚本
+README.md                    → 项目说明文档
+
+
+💡 提示
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• 私有仓库有 Actions 使用时长限制（免费账户 2000 分钟/月）
+• 公开仓库无限制使用
+• Artifacts 保留 90 天，Release 文件永久保留
+• 推荐使用语义化版本号: v主版本.次版本.修订号（如 v1.0.0）
+
+
+🎉 现在你已经准备好了！运行 ./deploy.sh 开始第一次部署吧！
