@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, Manager, State};
+use tauri::tray::{TrayIconBuilder, TrayIcon};
 use futures_util::StreamExt;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use image::GenericImageView;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 struct GotifyMessage {
@@ -32,10 +34,25 @@ struct AppState {
     config: Arc<Mutex<Option<ConnectionConfig>>>,
     ws_running: Arc<Mutex<bool>>,
     window_position: Arc<Mutex<Option<WindowPosition>>>,
+    tray_icon: Arc<Mutex<Option<TrayIcon>>>,
+}
+
+// 获取跨平台的配置目录
+fn get_config_dir() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        std::env::var("APPDATA")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_else(|_| ".".to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    }
 }
 
 #[tauri::command]
-async fn save_config(
+async fn save_config_to_file(
     state: State<'_, AppState>,
     server_url: String,
     client_token: String,
@@ -44,17 +61,141 @@ async fn save_config(
         server_url,
         client_token,
     };
-    
+
     let mut state_config = state.config.lock().unwrap();
-    *state_config = Some(config);
-    
-    Ok("Configuration saved successfully".to_string())
+    *state_config = Some(config.clone());
+
+    // 保存到文件
+    let config_dir = get_config_dir();
+    let config_path = format!("{}/.gotify_config.json", config_dir);
+
+    match std::fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap()) {
+        Ok(_) => {
+            println!("✅ 配置已保存到文件: {}", config_path);
+            Ok("Configuration saved successfully".to_string())
+        },
+        Err(e) => {
+            eprintln!("❌ 保存配置失败: {}", e);
+            Err(format!("Failed to save config: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn test_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    println!("🧪 测试调用设置窗口...");
+    show_settings_window(app).await
+}
+
+#[tauri::command]
+async fn show_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    // 检查是否已有设置窗口
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+
+    // 创建设置窗口
+    let _settings_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "settings",
+        tauri::WebviewUrl::App("settings.html".into())
+    )
+    .title("Gotify 设置")
+    .inner_size(800.0, 600.0)
+    .min_inner_size(700.0, 500.0)
+    .center()
+    .build()
+    .map_err(|e| format!("Failed to create settings window: {}", e))?;
+
+    Ok(())
+}
+
+fn load_config_from_file() -> Option<ConnectionConfig> {
+    let config_dir = get_config_dir();
+    let config_path = format!("{}/.gotify_config.json", config_dir);
+
+    match std::fs::read_to_string(&config_path) {
+        Ok(content) => {
+            match serde_json::from_str::<ConnectionConfig>(&content) {
+                Ok(config) => {
+                    println!("✅ 从文件加载配置成功: {}", config_path);
+                    Some(config)
+                },
+                Err(e) => {
+                    eprintln!("❌ 解析配置文件失败: {}", e);
+                    None
+                }
+            }
+        },
+        Err(_) => {
+            println!("ℹ️ 未找到配置文件，使用默认配置");
+            None
+        }
+    }
 }
 
 #[tauri::command]
 async fn get_config(state: State<'_, AppState>) -> Result<Option<ConnectionConfig>, String> {
     let config = state.config.lock().unwrap();
     Ok(config.clone())
+}
+
+#[tauri::command]
+async fn save_config(
+    state: State<'_, AppState>,
+    server_url: String,
+    client_token: String,
+) -> Result<String, String> {
+    save_config_to_file(state, server_url, client_token).await
+}
+
+#[tauri::command]
+async fn test_connection(
+    server_url: String,
+    client_token: String,
+) -> Result<String, String> {
+    // 构建 WebSocket URL
+    let ws_url = {
+        let server_url = server_url.trim_end_matches('/');
+        let protocol = if server_url.starts_with("https://") {
+            "wss://"
+        } else {
+            "ws://"
+        };
+        let host = server_url
+            .trim_start_matches("https://")
+            .trim_start_matches("http://");
+        format!("{}{}/stream?token={}", protocol, host, client_token)
+    };
+
+    println!("🧪 测试连接到: {}", ws_url);
+
+    // 尝试解析 URL
+    let url = url::Url::parse(&ws_url)
+        .map_err(|e| format!("URL 解析失败: {}", e))?;
+
+    // 尝试连接 WebSocket
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        connect_async(url)
+    ).await {
+        Ok(Ok((ws_stream, _))) => {
+            println!("✅ WebSocket 连接测试成功");
+            drop(ws_stream); // 立即关闭测试连接
+            Ok("连接成功".to_string())
+        }
+        Ok(Err(e)) => {
+            eprintln!("❌ WebSocket 连接失败: {}", e);
+            Err(format!("连接失败: {}。请检查服务器地址和 Token 是否正确", e))
+        }
+        Err(_) => {
+            eprintln!("❌ 连接超时");
+            Err("连接超时，请检查服务器地址是否可访问".to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -122,8 +263,8 @@ async fn save_window_position_auto(
     *window_position = Some(window_pos.clone());
     
     // 保存到文件
-    let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let config_path = format!("{}/.gotify_window_position.json", home_dir);
+    let config_dir = get_config_dir();
+    let config_path = format!("{}/.gotify_window_position.json", config_dir);
     
     match std::fs::write(&config_path, serde_json::to_string_pretty(&window_pos).unwrap()) {
         Ok(_) => {
@@ -150,8 +291,8 @@ async fn save_window_position(
     *window_position = Some(position.clone());
     
     // 保存到文件
-    let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let config_path = format!("{}/.gotify_window_position.json", home_dir);
+    let config_dir = get_config_dir();
+    let config_path = format!("{}/.gotify_window_position.json", config_dir);
     
     match std::fs::write(&config_path, serde_json::to_string_pretty(&position).unwrap()) {
         Ok(_) => {
@@ -167,8 +308,8 @@ async fn save_window_position(
 
 #[tauri::command]
 async fn load_window_position(state: State<'_, AppState>) -> Result<Option<WindowPosition>, String> {
-    let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    let config_path = format!("{}/.gotify_window_position.json", home_dir);
+    let config_dir = get_config_dir();
+    let config_path = format!("{}/.gotify_window_position.json", config_dir);
     
     match std::fs::read_to_string(&config_path) {
         Ok(content) => {
@@ -307,12 +448,13 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
-            config: Arc::new(Mutex::new(Some(ConnectionConfig {
+            config: Arc::new(Mutex::new(load_config_from_file().or_else(|| Some(ConnectionConfig {
                 server_url: "http://192.168.31.88:7777".to_string(),
                 client_token: "CDEtcxPRxdQM1qf".to_string(),
-            }))),
+            })))),
             ws_running: Arc::new(Mutex::new(false)),
             window_position: Arc::new(Mutex::new(None)),
+            tray_icon: Arc::new(Mutex::new(None)),
         })
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -323,8 +465,13 @@ pub fn run() {
                 let state: tauri::State<AppState> = app_handle.state();
                 
                 // 加载保存的窗口位置
-                let home_dir = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-                let config_path = format!("{}/.gotify_window_position.json", home_dir);
+                let config_dir = get_config_dir();
+                let config_path = format!("{}/.gotify_window_position.json", config_dir);
+                
+                // 确保窗口可见且未最小化（Windows 兼容性）
+                let _ = main_window.unminimize();
+                let _ = main_window.show();
+                let _ = main_window.set_focus();
                 
                 if let Ok(content) = std::fs::read_to_string(&config_path) {
                     if let Ok(position) = serde_json::from_str::<WindowPosition>(&content) {
@@ -349,23 +496,23 @@ pub fn run() {
                     // 如果没有保存的位置，居中显示
                     let _ = main_window.center();
                 }
-                
+
                 // 等待 1 秒后自动连接
                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                
+
                 let config = {
                     let cfg = state.config.lock().unwrap();
                     cfg.clone()
                 };
-                
+
                 if let Some(config) = config {
                     println!("🚀 自动连接到 Gotify 服务器...");
-                    
+
                     let mut ws_running = state.ws_running.lock().unwrap();
                     if !*ws_running {
                         *ws_running = true;
                         drop(ws_running);
-                        
+
                         let ws_running_clone = state.ws_running.clone();
                         tokio::spawn(async move {
                             if let Err(e) = run_websocket(app_handle, config, ws_running_clone).await {
@@ -375,18 +522,64 @@ pub fn run() {
                     }
                 }
             });
-            
+
+            // 创建系统托盘
+            use tauri::{menu::{Menu, MenuItem}};
+
+            println!("🔧 开始创建系统托盘...");
+            let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
+
+            // 加载托盘图标 - 解码 PNG 以获得 RGBA 数据
+            let icon_png = include_bytes!("../icons/icon.png");
+            let icon_image = image::load_from_memory(icon_png)
+                .map_err(|e| format!("Failed to decode tray icon: {}", e))?;
+            let (icon_width, icon_height) = icon_image.dimensions();
+            let icon_rgba = icon_image.into_rgba8().into_raw();
+            let icon = tauri::image::Image::new_owned(icon_rgba, icon_width, icon_height);
+            println!("✅ 托盘图标加载成功");
+
+            let tray = TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&tray_menu)
+                .show_menu_on_left_click(true)
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "settings" => {
+                            println!("🖱️ 用户点击了设置菜单");
+                            let _ = app.emit("show-settings", ());
+                        }
+                        "quit" => {
+                            println!("🚪 用户点击了退出菜单");
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .build(app)?;
+            println!("✅ 系统托盘创建成功");
+
+            // 保存tray到状态
+            let state: tauri::State<AppState> = app.state();
+            let mut tray_icon = state.tray_icon.lock().unwrap();
+            *tray_icon = Some(tray);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             save_config,
+            save_config_to_file,
             get_config,
+            test_connection,
             start_websocket,
             stop_websocket,
             is_websocket_running,
             save_window_position,
             save_window_position_auto,
             load_window_position,
+            show_settings_window,
+            test_settings_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
