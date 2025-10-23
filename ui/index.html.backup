@@ -97,6 +97,11 @@
             z-index: 1000;
         }
 
+        .theme-toggle span {
+            display: block;
+            line-height: 1;
+        }
+
         .theme-toggle:hover {
             transform: scale(1.1);
             box-shadow: 0 4px 12px var(--shadow);
@@ -104,24 +109,6 @@
 
         .theme-toggle:active {
             transform: scale(0.95);
-        }
-
-        /* 跟随系统主题时的特殊样式 */
-        .theme-toggle.following-system {
-            border: 2px solid var(--accent) !important;
-            box-shadow: 0 0 8px var(--accent) !important;
-            animation: pulse-system-theme 2s infinite;
-        }
-
-        @keyframes pulse-system-theme {
-            0%, 100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-            50% {
-                opacity: 0.8;
-                transform: scale(1.05);
-            }
         }
 
         .clear-all-btn {
@@ -401,7 +388,6 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-tertiary);
         }
-    </style>
 </head>
 
 <body>
@@ -419,7 +405,7 @@
         </div>
 
         <!-- 主题切换按钮 - 固定在右下角 -->
-        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题 (双击跟随系统)" ondblclick="toggleSystemThemeFollow()">
+        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
             <span id="theme-icon">🌙</span>
         </button>
 
@@ -438,139 +424,23 @@
 
         // 初始化主题
         function initTheme() {
-            // 首先尝试从localStorage获取用户保存的主题偏好
-            const savedTheme = localStorage.getItem('theme');
-
-            if (savedTheme) {
-                // 如果用户有保存的偏好，使用保存的主题
-                document.documentElement.setAttribute('data-theme', savedTheme);
-                updateThemeIcon(savedTheme);
-                console.log('🎨 使用保存的主题偏好:', savedTheme);
-            } else {
-                // 如果没有保存的偏好，检测系统主题并设置默认跟随系统
-                localStorage.setItem('follow-system-theme', 'true');
-                detectSystemTheme();
-            }
-        }
-
-        // 检测系统主题
-        async function detectSystemTheme() {
-            if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
-                console.warn('⚠️ Tauri API 不可用，使用默认浅色主题');
-                document.documentElement.setAttribute('data-theme', 'light');
-                updateThemeIcon('light');
-                return;
-            }
-
-            try {
-                const { invoke } = window.__TAURI_INTERNALS__;
-                const systemTheme = await invoke('get_system_theme');
-                console.log('🎨 检测到系统主题:', systemTheme);
-
-                document.documentElement.setAttribute('data-theme', systemTheme);
-                updateThemeIcon(systemTheme);
-            } catch (error) {
-                console.error('❌ 获取系统主题失败:', error);
-                // 降级到默认浅色主题
-                document.documentElement.setAttribute('data-theme', 'light');
-                updateThemeIcon('light');
-            }
-        }
-
-        // 监听系统主题变化
-        async function initSystemThemeListener() {
-            if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
-                console.warn('⚠️ Tauri API 不可用，无法监听系统主题变化');
-                return;
-            }
-
-            try {
-                console.log('🔄 初始化系统主题监听器...');
-
-                // 使用Tauri事件系统监听主题变化
-                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
-                    const { listen } = window.__TAURI__.event;
-
-                    await listen('tauri://theme-changed', (event) => {
-                        console.log('🎨 系统主题已更改:', event.payload);
-
-                        const newTheme = event.payload.theme;
-                        const shouldFollowSystem = localStorage.getItem('follow-system-theme') !== 'false';
-
-                        if (shouldFollowSystem) {
-                            document.documentElement.setAttribute('data-theme', newTheme);
-                            updateThemeIcon(newTheme);
-                            console.log('✅ 自动切换到系统主题:', newTheme);
-                        } else {
-                            console.log('ℹ️ 用户选择不跟随系统主题，忽略系统主题变化');
-                        }
-                    });
-
-                    console.log('✅ 系统主题监听器已注册');
-                } else {
-                    console.warn('⚠️ Tauri 事件 API 不可用，无法监听系统主题变化');
-                }
-            } catch (error) {
-                console.error('❌ 初始化系统主题监听器失败:', error);
-            }
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
         }
 
         function toggleTheme() {
             const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-
-            // 保存用户手动切换的主题偏好
-            localStorage.setItem('theme', newTheme);
-            localStorage.setItem('follow-system-theme', 'false'); // 用户手动切换后，不再跟随系统
-
             document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
             updateThemeIcon(newTheme);
-
-            console.log('🎨 用户手动切换主题:', newTheme);
-        }
-
-        // 启用/禁用系统主题跟随
-        function toggleSystemThemeFollow() {
-            const shouldFollow = localStorage.getItem('follow-system-theme') !== 'false';
-
-            if (shouldFollow) {
-                // 禁用跟随系统主题
-                localStorage.setItem('follow-system-theme', 'false');
-                console.log('🔄 停止跟随系统主题');
-
-                // 使用当前主题作为自定义主题
-                const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
-                localStorage.setItem('theme', currentTheme);
-            } else {
-                // 启用跟随系统主题
-                localStorage.setItem('follow-system-theme', 'true');
-                localStorage.removeItem('theme'); // 清除自定义主题偏好
-                detectSystemTheme(); // 立即应用系统主题
-                console.log('🔄 开始跟随系统主题');
-            }
-
-            // 更新按钮状态
-            updateThemeIcon(document.documentElement.getAttribute('data-theme') || 'light');
         }
 
         function updateThemeIcon(theme) {
             const icon = document.getElementById('theme-icon');
-            const themeButton = document.querySelector('.theme-toggle');
-            const shouldFollowSystem = localStorage.getItem('follow-system-theme') !== 'false';
-
-            if (icon && themeButton) {
-                // 根据主题和跟随状态设置图标
-                if (shouldFollowSystem) {
-                    // 跟随系统主题
-                    icon.textContent = theme === 'light' ? '☀️' : '🌙';
-                    themeButton.title = `跟随系统主题 (${theme === 'light' ? '浅色' : '深色'}) - 单击切换主题`;
-                    themeButton.classList.add('following-system');
-                } else {
-                    // 用户自定义主题
-                    icon.textContent = theme === 'light' ? '🌙' : '☀️';
-                    themeButton.title = `自定义主题 (${theme === 'light' ? '浅色' : '深色'}) - 单击切换，双击跟随系统`;
-                    themeButton.classList.remove('following-system');
-                }
+            if (icon) {
+                icon.textContent = theme === 'light' ? '🌙' : '☀️';
             }
         }
 
@@ -698,9 +568,6 @@
                     // 在 Tauri API 确认可用后，恢复窗口位置和启动追踪
                     await restoreWindowPosition();
                     await initWindowPositionTracking();
-
-                    // 初始化系统主题监听器
-                    await initSystemThemeListener();
 
                 } catch (error) {
                     console.error('❌❌❌ 注册监听器时出错:');
@@ -906,19 +773,19 @@
 
                     // 监听窗口移动事件
                     await listen('tauri://move', (event) => {
-                        console.log('🪟 窗口移动事件');
+                        console.log('窗口移动事件');
                         saveWindowPositionDebounced();
                     });
 
                     // 监听窗口调整大小事件
                     await listen('tauri://resize', (event) => {
-                        console.log('🪟 窗口调整大小事件');
+                        console.log('窗口调整大小事件');
                         saveWindowPositionDebounced();
                     });
 
                     console.log('✅ 窗口事件监听器已注册');
                 } else {
-                    console.warn('⚠️ Tauri 事件 API 不可用，仅在关闭时保存');
+                    console.warn('Tauri 事件 API 不可用，仅在关闭时保存');
                 }
 
                 // 页面关闭时保存

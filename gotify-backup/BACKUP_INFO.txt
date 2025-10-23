@@ -1,0 +1,20 @@
+📁 Gotify Notifier 项目备份完成！
+
+📂 备份位置: /Users/liubo/Desktop/gotify-backup/
+
+📋 备份内容:
+✅ 核心代码 (src/lib.rs, src/main.rs)
+✅ 项目配置 (Cargo.toml, tauri.conf.json) 
+✅ 前端界面 (ui/index.html, ui/settings.html)
+✅ 构建脚本 (build_and_test.sh)
+✅ GitHub Actions (workflows/build.yml)
+✅ 项目文档 (README.md, GITHUB_ACTIONS_GUIDE.md)
+✅ 图标资源 (icons/ 目录)
+
+🔄 恢复方法:
+1. 创建新项目: tauri init gotify-notifier
+2. 复制备份文件到对应位置
+3. 运行: cd gotify-backup && cargo build
+
+📅 备份时间: Thu Oct 23 15:31:34 CST 2025
+🚀 项目状态: v0.2.0 - 支持系统托盘、设置界面、跨平台兼容

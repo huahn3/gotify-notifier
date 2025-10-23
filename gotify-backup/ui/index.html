@@ -414,6 +414,9 @@
         <button id="clearAllBtn" class="clear-all-btn" onclick="clearAllNotifications()" title="清除所有（保留置顶）">
             🗑️
         </button>
+
+        <!-- 测试设置窗口按钮 -->
+        <button id="testSettingsBtn" onclick="testSettingsWindow()" style="display: none;">测试设置窗口</button>
     </div>
 
     <script>
@@ -444,6 +447,35 @@
 
         // 页面加载时初始化主题
         initTheme();
+
+
+
+        async function restoreWindowPosition() {
+            if (typeof window.__TAURI__ === 'undefined') {
+                console.warn('⚠️ Tauri API 不可用，无法恢复窗口位置');
+                return;
+            }
+
+            try {
+                const savedPosition = localStorage.getItem('windowPosition');
+                if (!savedPosition) {
+                    console.log('ℹ️ 没有保存的窗口位置');
+                    return;
+                }
+
+                const position = JSON.parse(savedPosition);
+                const { getCurrentWindow } = window.__TAURI__.window;
+                const appWindow = getCurrentWindow();
+
+                // 使用 LogicalPosition
+                const { LogicalPosition } = window.__TAURI__.window;
+                await appWindow.setPosition(new LogicalPosition(position.x, position.y));
+
+                console.log('📍 窗口位置已恢复:', position);
+            } catch (error) {
+                console.error('恢复窗口位置失败:', error);
+            }
+        }
 
         // 等待 DOM 和 Tauri 完全加载
         document.addEventListener('DOMContentLoaded', async () => {
@@ -507,17 +539,21 @@
                     });
                     console.log('✅ gotify-message 监听器注册成功！unlisten:', unlisten1);
 
-                    // 注册 websocket-status 监听器
-                    console.log('正在注册 websocket-status 监听器...');
-                    const unlisten2 = await listen('websocket-status', (event) => {
-                        console.log('🔔 收到 websocket-status:', event.payload);
-                        // 状态元素已移除，仅记录日志
+                    // 注册 show-settings 监听器
+                    console.log('正在注册 show-settings 监听器...');
+                    const unlisten3 = await listen('show-settings', (event) => {
+                        console.log('🖥️ 收到 show-settings 事件');
+                        showSettingsWindow();
                     });
-                    console.log('✅ websocket-status 监听器注册成功！');
+                    console.log('✅ show-settings 监听器注册成功！');
 
                     console.log('========================================');
                     console.log('🎊 所有监听器注册完成！等待接收消息...');
                     console.log('========================================');
+
+                    // 在 Tauri API 确认可用后，恢复窗口位置和启动追踪
+                    await restoreWindowPosition();
+                    await initWindowPositionTracking();
 
                 } catch (error) {
                     console.error('❌❌❌ 注册监听器时出错:');
@@ -675,24 +711,103 @@
             }
         }
 
-        // 清除所有通知（保留置顶）
-        function clearAllNotifications() {
-            const pinnedCount = notifications.filter(n => n.pinned).length;
-            const beforeCount = notifications.length;
+        // 测试设置窗口
+        async function testSettingsWindow() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
+                console.warn('⚠️ Tauri API 不可用，无法测试设置窗口');
+                return;
+            }
 
-            notifications = notifications.filter(n => n.pinned);
-
-            const deletedCount = beforeCount - notifications.length;
-
-            renderNotifications();
-
-            if (deletedCount > 0) {
-                console.log(`🗑️ 已清除 ${deletedCount} 条通知${pinnedCount > 0 ? `，保留 ${pinnedCount} 条置顶通知` : ''}`);
-            } else {
-                console.log('ℹ️ 没有可清除的通知');
+            try {
+                console.log('🧪 测试调用设置窗口...');
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('test_settings_window');
+                console.log('✅ 设置窗口测试完成');
+            } catch (error) {
+                console.error('❌ 测试设置窗口失败:', error);
             }
         }
 
+        // 显示设置窗口
+        async function showSettingsWindow() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') {
+                console.warn('⚠️ Tauri API 不可用，无法显示设置窗口');
+                return;
+            }
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+                await invoke('show_settings_window');
+                console.log('✅ 设置窗口已显示');
+            } catch (error) {
+                console.error('❌ 显示设置窗口失败:', error);
+            }
+        }
+
+        // 窗口位置跟踪
+        let savePositionTimeout;
+
+        async function initWindowPositionTracking() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') return;
+
+            try {
+                console.log('🪟 初始化窗口位置跟踪...');
+
+                // 使用 Tauri 事件监听窗口移动和调整大小
+                if (window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) {
+                    const { listen } = window.__TAURI__.event;
+
+                    // 监听窗口移动事件
+                    await listen('tauri://move', (event) => {
+                        console.log('🪟 窗口移动事件');
+                        saveWindowPositionDebounced();
+                    });
+
+                    // 监听窗口调整大小事件
+                    await listen('tauri://resize', (event) => {
+                        console.log('🪟 窗口调整大小事件');
+                        saveWindowPositionDebounced();
+                    });
+
+                    console.log('✅ 窗口事件监听器已注册');
+                } else {
+                    console.warn('⚠️ Tauri 事件 API 不可用，仅在关闭时保存');
+                }
+
+                // 页面关闭时保存
+                window.addEventListener('beforeunload', saveWindowPosition);
+
+                console.log('✅ 窗口位置跟踪已初始化');
+            } catch (error) {
+                console.error('初始化窗口位置跟踪失败:', error);
+            }
+        }
+
+        // 防抖保存函数
+        function saveWindowPositionDebounced() {
+            clearTimeout(savePositionTimeout);
+            savePositionTimeout = setTimeout(() => {
+                console.log('💾 防抖保存窗口位置');
+                saveWindowPosition();
+            }, 1000); // 1秒后保存
+        }
+
+        async function saveWindowPosition() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') return;
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+
+                console.log('💾 自动保存窗口位置...');
+
+                // 让后端直接获取窗口位置
+                await invoke('save_window_position_auto');
+
+                console.log('✅ 窗口位置保存完成');
+            } catch (error) {
+                console.error('❌ 保存窗口位置失败:', error);
+            }
+        }
 
         // 每分钟更新一次时间显示
         setInterval(() => {
@@ -704,12 +819,30 @@
             });
         }, 60000);
 
-        // 快捷键支持
-        document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + K: 清除全部
-            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                e.preventDefault();
-                clearAllNotifications();
+        // 重新连接WebSocket
+        async function reconnectWebSocket() {
+            if (typeof window.__TAURI_INTERNALS__ === 'undefined') return;
+
+            try {
+                const { invoke } = window.__TAURI_INTERNALS__;
+
+                // 停止当前连接
+                await invoke('stop_websocket');
+
+                // 重新启动连接
+                await invoke('start_websocket');
+
+                console.log('🔄 WebSocket 重新连接完成');
+            } catch (error) {
+                console.error('❌ 重新连接失败:', error);
+            }
+        }
+
+        // 监听配置保存事件
+        window.addEventListener('message', async (event) => {
+            if (event.data === 'config-saved') {
+                console.log('📝 配置已保存，重新连接...');
+                await reconnectWebSocket();
             }
         });
     </script>

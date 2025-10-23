@@ -78,36 +78,61 @@ git push origin v0.1.0
 
 详细说明请查看 [GitHub Actions 使用指南](./GITHUB_ACTIONS_GUIDE.md)
 
-## 使用说明
+## 配置说明
 
-### 1. 获取 Client Token
+### 安全提醒 ⚠️
 
-⚠️ **重要提示**：必须使用 **Client Token**，而非 Application Token！
+**重要安全信息**：
+- 应用不会硬编码任何服务器地址或Token
+- 所有配置信息存储在本地配置文件中
+- 请勿在公共仓库中提交包含敏感信息的配置文件
+- 建议使用环境变量配置敏感信息
 
-1. 登录你的 Gotify 服务器 Web 界面
-2. 进入 **Clients** 页面（不是 Applications 页面）
-3. 点击 "Create Client" 创建新客户端
-4. 复制生成的 Client Token
+### 配置方法
 
-### 2. 配置应用
+#### 方法 1：图形界面配置（推荐）
 
 1. 启动 Gotify Notifier
-2. 在配置区域填写：
-   - **Gotify 服务器地址**：例如 `https://gotify.example.com`
-   - **Client Token**：从 Clients 页面获取的 token
-3. 点击 "保存配置"
+2. 点击右键托盘图标 → "设置"
+3. 填写服务器地址和Client Token
+4. 点击 "保存设置"
 
-### 3. 连接服务器
+#### 方法 2：配置文件
 
-1. 点击 "连接" 按钮
-2. 状态指示器变为绿色表示连接成功
-3. 应用会自动接收并显示消息
+在用户目录创建 `~/.gotify_config.json`：
 
-### 4. 后台运行
+```json
+{
+  "server_url": "https://your-gotify-server.com",
+  "client_token": "your-client-token"
+}
+```
 
-- 关闭窗口后，应用会继续在系统托盘运行
-- 点击托盘图标可重新打开窗口
-- 右键托盘图标选择 "Quit" 完全退出应用
+#### 方法 3：环境变量
+
+设置环境变量（推荐用于CI/CD）：
+
+```bash
+# Linux/macOS
+export GOTIFY_SERVER_URL="https://your-gotify-server.com"
+export GOTIFY_CLIENT_TOKEN="your-client-token"
+
+# Windows
+set GOTIFY_SERVER_URL=https://your-gotify-server.com
+set GOTIFY_CLIENT_TOKEN=your-client-token
+```
+
+支持的环境变量：
+- `GOTIFY_SERVER_URL` 或 `GOTIFY_URL`
+- `GOTIFY_CLIENT_TOKEN` 或 `GOTIFY_TOKEN`
+
+### 配置优先级
+
+1. **环境变量**（最高优先级）
+2. **配置文件** `~/.gotify_config.json`
+3. **图形界面设置**（用户交互保存）
+
+如果所有配置源都无效，应用会提示用户进行配置。
 
 ## 项目结构
 

@@ -1,6 +1,6 @@
-# Gotify Notifier for macOS
+# Gotify Notifier
 
-一个使用 Rust + Tauri 构建的 Gotify 通知客户端，专为 macOS 设计。
+一个使用 Rust + Tauri 构建的 Gotify 通知客户端，支持 Windows、macOS 和 Linux。
 
 ## 功能特性
 
@@ -42,13 +42,41 @@ cargo tauri dev
 
 ### 生产构建
 
+#### 本地构建（当前平台）
+
 ```bash
-# 构建 macOS 应用
+# 构建当前平台的应用
 cargo tauri build
 
-# 构建完成后，应用位于:
-# target/release/bundle/macos/Gotify Notifier.app
+# macOS: target/release/bundle/macos/Gotify Notifier.app
+# Windows: target/release/bundle/msi/*.msi
+# Linux: target/release/bundle/deb/*.deb
 ```
+
+#### 使用 GitHub Actions 多平台构建（推荐）
+
+项目已配置 GitHub Actions，可自动构建所有平台的安装包：
+
+**方法 1：手动触发构建**
+1. 将代码推送到 GitHub
+2. 进入仓库的 Actions 页面
+3. 选择 "Build and Release" 工作流
+4. 点击 "Run workflow" 手动触发
+5. 构建完成后在 Artifacts 中下载安装包
+
+**方法 2：自动发布（推荐）**
+```bash
+# 使用提供的部署脚本
+./deploy.sh
+
+# 或手动执行
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+构建将自动开始，完成后会创建 GitHub Release。
+
+详细说明请查看 [GitHub Actions 使用指南](./GITHUB_ACTIONS_GUIDE.md)
 
 ## 使用说明
 

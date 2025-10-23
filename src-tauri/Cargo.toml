@@ -28,3 +28,6 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 futures-util = "0.3"
 url = "2.4"
 image = { version = "0.24", default-features = false, features = ["png"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winreg = "0.50"

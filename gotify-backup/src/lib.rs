@@ -88,82 +88,6 @@ async fn test_settings_window(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn get_system_theme() -> Result<String, String> {
-    println!("🎨 获取系统主题...");
-
-    #[cfg(target_os = "macos")]
-    {
-        // macOS 主题检测
-        use std::process::Command;
-
-        let output = Command::new("defaults")
-            .args(&["read", "-g", "AppleInterfaceStyle"])
-            .output();
-
-        match output {
-            Ok(result) if result.status.success() => {
-                let theme = String::from_utf8_lossy(&result.stdout).trim().to_string();
-                if theme == "Dark" {
-                    println!("🌙 检测到 macOS 深色模式");
-                    Ok("dark".to_string())
-                } else {
-                    println!("☀️ 检测到 macOS 浅色模式");
-                    Ok("light".to_string())
-                }
-            }
-            _ => {
-                println!("☀️ macOS 主题检测失败或为浅色模式");
-                Ok("light".to_string())
-            }
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        // Windows 主题检测 - 使用注册表
-        use winreg::RegKey;
-        use winreg::enums::*;
-
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let key_result = hkcu.open_subkey_with_flags(
-            "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-            KEY_READ
-        );
-
-        match key_result {
-            Ok(key) => {
-                match key.get_value::<u32, _>("AppsUseLightTheme") {
-                    Ok(value) => {
-                        if value == 0 {
-                            println!("🌙 检测到 Windows 深色模式");
-                            Ok("dark".to_string())
-                        } else {
-                            println!("☀️ 检测到 Windows 浅色模式");
-                            Ok("light".to_string())
-                        }
-                    }
-                    Err(_) => {
-                        println!("⚠️ Windows 主题检测失败，使用默认浅色模式");
-                        Ok("light".to_string())
-                    }
-                }
-            }
-            Err(_) => {
-                println!("⚠️ Windows 注册表访问失败，使用默认浅色模式");
-                Ok("light".to_string())
-            }
-        }
-    }
-
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        // Linux 等其他系统 - 简单的默认值
-        println!("☀️ 非 macOS/Windows 系统，使用默认浅色模式");
-        Ok("light".to_string())
-    }
-}
-
-#[tauri::command]
 async fn show_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     // 检查是否已有设置窗口
     if let Some(window) = app.get_webview_window("settings") {
@@ -663,23 +587,6 @@ pub fn run() {
 
             Ok(())
         })
-        .on_window_event(|window, event| match event {
-            tauri::WindowEvent::ThemeChanged(theme) => {
-                println!("🎨 系统主题已更改: {:?}", theme);
-
-                // 发送主题变化事件到前端
-                let theme_str = match theme {
-                    tauri::Theme::Light => "light",
-                    tauri::Theme::Dark => "dark",
-                    _ => "light", // 默认浅色主题
-                };
-
-                let _ = window.emit("tauri://theme-changed", serde_json::json!({
-                    "theme": theme_str
-                }));
-            }
-            _ => {}
-        })
         .invoke_handler(tauri::generate_handler![
             save_config,
             save_config_to_file,
@@ -693,7 +600,6 @@ pub fn run() {
             load_window_position,
             show_settings_window,
             test_settings_window,
-            get_system_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

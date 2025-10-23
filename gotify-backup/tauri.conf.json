@@ -19,17 +19,13 @@
         "minHeight": 200,
         "resizable": true,
         "fullscreen": false,
-        "center": true,
+        "center": false,
         "decorations": true,
         "alwaysOnTop": false
       }
     ],
     "security": {
       "csp": null
-    },
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
     }
   },
   "bundle": {
